@@ -2,6 +2,7 @@
 import tensorflow as tf
 import numpy as np
 
+
 class ModelAnalyser:
     def __init__(self, model, format: str):
         self.model = model
@@ -11,17 +12,50 @@ class ModelAnalyser:
         if self.format == 'keras':
             total = self.model.count_params()
             trainable = sum([
-                np.prod(v.shape) 
+                np.prod(v.shape)
                 for v in self.model.trainable_weights
             ])
             return {
                 'total': int(total),
                 'trainable': int(trainable),
                 'non_trainable': int(total - trainable),
-                'size_bytes': int(total * 4),  # float32 = 4 bytes
+                'size_bytes': int(total * 4),
                 'size_kb': round(total * 4 / 1024, 2),
                 'size_mb': round(total * 4 / 1024 / 1024, 3)
             }
+
+        elif self.format == 'tflite':
+            # For TFLite, estimate from model binary size
+            import os
+            # model is an interpreter here
+            interpreter = self.model
+            total_params = 0
+            for detail in interpreter.get_tensor_details():
+                tensor = interpreter.get_tensor(detail['index'])
+                total_params += tensor.size
+
+            # Get actual file size from interpreter
+            # Estimate: count all weight tensors
+            weight_params = 0
+            for detail in interpreter.get_tensor_details():
+                if detail['quantization_parameters']['scales'].size == 0:
+                    tensor = interpreter.get_tensor(detail['index'])
+                    weight_params += tensor.size
+
+            size_bytes = weight_params * 4
+            return {
+                'total': int(weight_params),
+                'trainable': int(weight_params),
+                'non_trainable': 0,
+                'size_bytes': int(size_bytes),
+                'size_kb': round(size_bytes / 1024, 2),
+                'size_mb': round(size_bytes / 1024 / 1024, 3)
+            }
+
+        return {
+            'total': 0, 'trainable': 0, 'non_trainable': 0,
+            'size_bytes': 0, 'size_kb': 0.0, 'size_mb': 0.0
+        }
 
     def compute_flops(self) -> dict:
         """
@@ -29,14 +63,46 @@ class ModelAnalyser:
         For Conv2D: FLOPs = 2 * Kh * Kw * Cin * Cout * Hout * Wout
         For Dense:  FLOPs = 2 * input_size * output_size
         """
+        if self.format == 'tflite':
+            # Estimate FLOPs from tensor shapes for TFLite
+            interpreter = self.model
+            total_flops = 0
+            layer_flops = []
+
+            details = interpreter.get_tensor_details()
+            for detail in details:
+                tensor = interpreter.get_tensor(detail['index'])
+                shape = tensor.shape
+                if len(shape) == 4:  # Conv-like
+                    flops = int(np.prod(shape) * shape[-1] * 2)
+                elif len(shape) == 2:  # Dense-like
+                    flops = int(shape[0] * shape[1] * 2)
+                else:
+                    flops = 0
+                total_flops += flops
+                layer_flops.append({
+                    'name': detail['name'],
+                    'type': f"Tensor({len(shape)}D)",
+                    'flops': flops,
+                    'params': int(tensor.size)
+                })
+
+            # Filter to only meaningful layers
+            layer_flops = [l for l in layer_flops if l['flops'] > 0]
+
+            return {
+                'total_flops': total_flops,
+                'total_mflops': round(total_flops / 1e6, 3),
+                'layer_breakdown': layer_flops
+            }
+
+        # Keras model
         total_flops = 0
         layer_flops = []
 
-        if self.format == 'keras':
-            for layer in self.model.layers:
-                flops = 0
-                config = layer.get_config()
-
+        for layer in self.model.layers:
+            flops = 0
+            try:
                 if isinstance(layer, tf.keras.layers.Conv2D):
                     kh, kw = layer.kernel_size
                     cin = layer.input_shape[-1]
@@ -54,14 +120,16 @@ class ModelAnalyser:
                     out_h = layer.output_shape[1]
                     out_w = layer.output_shape[2]
                     flops = 2 * kh * kw * cin * out_h * out_w
+            except Exception:
+                flops = 0
 
-                total_flops += flops
-                layer_flops.append({
-                    'name': layer.name,
-                    'type': layer.__class__.__name__,
-                    'flops': int(flops),
-                    'params': int(layer.count_params())
-                })
+            total_flops += flops
+            layer_flops.append({
+                'name': layer.name,
+                'type': layer.__class__.__name__,
+                'flops': int(flops),
+                'params': int(layer.count_params())
+            })
 
         return {
             'total_flops': total_flops,
@@ -73,9 +141,30 @@ class ModelAnalyser:
         """
         Peak RAM = largest intermediate activation tensor during forward pass
         """
-        if self.format != 'keras':
-            return {}
+        if self.format == 'tflite':
+            interpreter = self.model
+            peak_bytes = 0
+            layer_activations = []
 
+            for detail in interpreter.get_tensor_details():
+                tensor = interpreter.get_tensor(detail['index'])
+                bytes_needed = tensor.size * 4
+                peak_bytes = max(peak_bytes, bytes_needed)
+                if tensor.size > 0:
+                    layer_activations.append({
+                        'name': detail['name'],
+                        'output_shape': str(tensor.shape),
+                        'activation_kb': round(bytes_needed / 1024, 2)
+                    })
+
+            return {
+                'peak_ram_bytes': peak_bytes,
+                'peak_ram_kb': round(peak_bytes / 1024, 2),
+                'peak_ram_mb': round(peak_bytes / 1024 / 1024, 3),
+                'layer_activations': layer_activations
+            }
+
+        # Keras model
         peak_activation_bytes = 0
         layer_activations = []
 
@@ -85,14 +174,14 @@ class ModelAnalyser:
                 if isinstance(output_shape, list):
                     output_shape = output_shape[0]
                 elements = np.prod([d for d in output_shape if d is not None])
-                bytes_needed = int(elements * 4)  # float32
+                bytes_needed = int(elements * 4)
                 peak_activation_bytes = max(peak_activation_bytes, bytes_needed)
                 layer_activations.append({
                     'name': layer.name,
                     'output_shape': str(output_shape),
                     'activation_kb': round(bytes_needed / 1024, 2)
                 })
-            except:
+            except Exception:
                 continue
 
         return {
