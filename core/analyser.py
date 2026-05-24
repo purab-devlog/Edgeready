@@ -8,6 +8,10 @@ class ModelAnalyser:
         self.model = model
         self.format = format
 
+        # Allocate tensors immediately for TFLite
+        if self.format == 'tflite':
+            self.model.allocate_tensors()
+
     def count_parameters(self) -> dict:
         if self.format == 'keras':
             total = self.model.count_params()
@@ -25,22 +29,15 @@ class ModelAnalyser:
             }
 
         elif self.format == 'tflite':
-            # For TFLite, estimate from model binary size
-            import os
-            # model is an interpreter here
             interpreter = self.model
-            total_params = 0
-            for detail in interpreter.get_tensor_details():
-                tensor = interpreter.get_tensor(detail['index'])
-                total_params += tensor.size
-
-            # Get actual file size from interpreter
-            # Estimate: count all weight tensors
             weight_params = 0
+
             for detail in interpreter.get_tensor_details():
-                if detail['quantization_parameters']['scales'].size == 0:
+                try:
                     tensor = interpreter.get_tensor(detail['index'])
                     weight_params += tensor.size
+                except Exception:
+                    continue
 
             size_bytes = weight_params * 4
             return {
@@ -58,37 +55,32 @@ class ModelAnalyser:
         }
 
     def compute_flops(self) -> dict:
-        """
-        Estimates FLOPs per inference.
-        For Conv2D: FLOPs = 2 * Kh * Kw * Cin * Cout * Hout * Wout
-        For Dense:  FLOPs = 2 * input_size * output_size
-        """
         if self.format == 'tflite':
-            # Estimate FLOPs from tensor shapes for TFLite
             interpreter = self.model
             total_flops = 0
             layer_flops = []
 
-            details = interpreter.get_tensor_details()
-            for detail in details:
-                tensor = interpreter.get_tensor(detail['index'])
-                shape = tensor.shape
-                if len(shape) == 4:  # Conv-like
-                    flops = int(np.prod(shape) * shape[-1] * 2)
-                elif len(shape) == 2:  # Dense-like
-                    flops = int(shape[0] * shape[1] * 2)
-                else:
-                    flops = 0
-                total_flops += flops
-                layer_flops.append({
-                    'name': detail['name'],
-                    'type': f"Tensor({len(shape)}D)",
-                    'flops': flops,
-                    'params': int(tensor.size)
-                })
+            for detail in interpreter.get_tensor_details():
+                try:
+                    tensor = interpreter.get_tensor(detail['index'])
+                    shape = tensor.shape
+                    if len(shape) == 4:
+                        flops = int(np.prod(shape) * shape[-1] * 2)
+                    elif len(shape) == 2:
+                        flops = int(shape[0] * shape[1] * 2)
+                    else:
+                        flops = 0
 
-            # Filter to only meaningful layers
-            layer_flops = [l for l in layer_flops if l['flops'] > 0]
+                    total_flops += flops
+                    if flops > 0:
+                        layer_flops.append({
+                            'name': detail['name'] or f"tensor_{detail['index']}",
+                            'type': f"Tensor({len(shape)}D)",
+                            'flops': flops,
+                            'params': int(tensor.size)
+                        })
+                except Exception:
+                    continue
 
             return {
                 'total_flops': total_flops,
@@ -138,24 +130,24 @@ class ModelAnalyser:
         }
 
     def estimate_ram(self) -> dict:
-        """
-        Peak RAM = largest intermediate activation tensor during forward pass
-        """
         if self.format == 'tflite':
             interpreter = self.model
             peak_bytes = 0
             layer_activations = []
 
             for detail in interpreter.get_tensor_details():
-                tensor = interpreter.get_tensor(detail['index'])
-                bytes_needed = tensor.size * 4
-                peak_bytes = max(peak_bytes, bytes_needed)
-                if tensor.size > 0:
-                    layer_activations.append({
-                        'name': detail['name'],
-                        'output_shape': str(tensor.shape),
-                        'activation_kb': round(bytes_needed / 1024, 2)
-                    })
+                try:
+                    tensor = interpreter.get_tensor(detail['index'])
+                    bytes_needed = tensor.size * 4
+                    peak_bytes = max(peak_bytes, bytes_needed)
+                    if tensor.size > 0:
+                        layer_activations.append({
+                            'name': detail['name'] or f"tensor_{detail['index']}",
+                            'output_shape': str(tensor.shape),
+                            'activation_kb': round(bytes_needed / 1024, 2)
+                        })
+                except Exception:
+                    continue
 
             return {
                 'peak_ram_bytes': peak_bytes,
