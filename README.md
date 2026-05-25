@@ -1,6 +1,8 @@
 # ⚡ EdgeReady
 
-> Upload any neural network. Find out if it can run on embedded hardware — and how to fix it if it can't.
+> Upload any neural network. Find out if it can run on embedded hardware — and how to fix it if it can't. Link to the deployed webpage is below
+
+https://edgeready.streamlit.app/
 
 ![EdgeReady Demo](assets/demo.gif)
 
