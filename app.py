@@ -15,45 +15,70 @@ st.set_page_config(page_title="EdgeReady", layout="wide", page_icon="⚡")
 
 st.title("⚡ EdgeReady")
 st.caption(
-    "Upload any neural network — Keras, ONNX, or TFLite. "
-    "Find out if it can run on embedded hardware, compress it, and download it deployment-ready."
+    "Upload a TFLite model. Find out if it can run on embedded hardware, "
+    "compress it, and download it deployment-ready."
 )
 
 with st.sidebar:
     st.header("How it works")
     st.markdown("""
-    1. **Upload** your trained model
-    2. **Auto-convert** to TFLite internally
-    3. **Diagnose** — traffic light readiness report
-    4. **Compress** — shrink it for your target chip
-    5. **Estimate** — pick target hardware
-    6. **Export** — download the optimised model
+    1. **Upload** your `.tflite` model
+    2. **Diagnose** — traffic light readiness report
+    3. **Compress** — shrink it for your target chip
+    4. **Estimate** — pick your target hardware
+    5. **Export** — download the optimised model
     """)
     st.divider()
-    st.markdown("**Supported formats**")
-    st.markdown("`.h5` `.keras` `.tflite` `.onnx`")
-    st.divider()
-    st.caption(
-        "All formats are converted to TFLite internally — "
-        "the actual deployment format for embedded systems."
-    )
 
+    st.markdown("**Why TFLite only?**")
+    st.caption(
+        "TFLite is the actual deployment format for embedded systems like "
+        "STM32 and ESP32. This tool focuses on the deployment stage — "
+        "once your model is trained, convert it to TFLite first, "
+        "then use EdgeReady to optimise it for your target chip."
+    )
+    st.divider()
+
+    st.markdown("**How to convert your model to TFLite**")
+    st.code("""
+import tensorflow as tf
+
+# From Keras .h5 or .keras
+model = tf.keras.models.load_model('your_model.h5')
+converter = tf.lite.TFLiteConverter.from_keras_model(model)
+tflite_model = converter.convert()
+
+with open('your_model.tflite', 'wb') as f:
+    f.write(tflite_model)
+    """, language="python")
+
+    st.divider()
+    st.caption("Supported: `.tflite`")
+
+# ── Upload ─────────────────────────────────────────────────────────────────
 uploaded = st.file_uploader(
-    "Upload your model",
-    type=['h5', 'keras', 'tflite', 'onnx'],
-    help="Supports Keras (.h5, .keras), TFLite (.tflite), and ONNX (.onnx)"
+    "Upload your TFLite model",
+    type=['tflite'],
+    help="Upload a .tflite file. See sidebar for how to convert from Keras or ONNX."
 )
+
+if not uploaded:
+    st.info(
+        "👆 Upload a `.tflite` model to get started. "
+        "Don't have one? See the sidebar for a quick conversion snippet."
+    )
 
 if uploaded:
     raw_bytes = uploaded.read()
-    suffix = uploaded.name.split('.')[-1].lower()
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{suffix}") as f:
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.tflite') as f:
         f.write(raw_bytes)
         tmp_path = f.name
 
-    # ── Load & convert ────────────────────────────────────────────────────────
-    with st.spinner(f"Loading {suffix.upper()} model and converting to TFLite..."):
+    st.session_state['uploaded_raw_bytes'] = raw_bytes
+
+    # ── Load ───────────────────────────────────────────────────────────────
+    with st.spinner("Loading model..."):
         try:
             loader = ModelLoader(tmp_path)
             model, metadata = loader.load()
@@ -63,22 +88,14 @@ if uploaded:
             os.unlink(tmp_path)
             st.stop()
 
-    # Show conversion banner if format was converted
-    original_fmt = metadata.get('original_format', suffix)
-    if original_fmt != 'tflite':
-        st.success(
-            f"✅ **{uploaded.name}** loaded and converted to TFLite internally. "
-            f"({metadata['framework']})"
-        )
-    else:
-        st.success(f"✅ **{uploaded.name}** loaded. ({metadata['framework']})")
+    st.success(f"✅ **{uploaded.name}** loaded successfully.")
 
     col1, col2, col3 = st.columns(3)
     col1.caption(f"**Input shape:** `{metadata.get('input_shape', 'unknown')}`")
     col2.caption(f"**Input dtype:** `{metadata.get('input_dtype', 'unknown')}`")
     col3.caption(f"**Output shape:** `{metadata.get('output_shape', 'unknown')}`")
 
-    # ── Analyse ───────────────────────────────────────────────────────────────
+    # ── Analyse ────────────────────────────────────────────────────────────
     with st.spinner("Analysing model..."):
         analyser = ModelAnalyser(model, 'tflite')
         report = analyser.full_report()
@@ -125,14 +142,12 @@ if uploaded:
             render_compression_results(report, compressed_kb, method, summary)
 
             if ternary_stats:
-                note = ternary_stats.get('note', '')
                 st.info(
                     f"🔬 **Ternary stats** — "
                     f"Tensors analysed: {ternary_stats['layers_ternarized']} | "
                     f"Near-zero weights: {ternary_stats['weights_zeroed']:,} / "
                     f"{ternary_stats['total_weights']:,} "
                     f"({ternary_stats['sparsity_pct']}% sparsity)"
-                    + (f"\n\n_{note}_" if note else "")
                 )
 
             st.session_state['tflite_out'] = tflite_out
@@ -152,7 +167,6 @@ if uploaded:
     compressed_kb = st.session_state.get('compressed_kb', None)
     render_hardware_estimate(estimate, compressed_kb)
 
-    # Show compressed model estimate if available
     if compressed_kb and 'compressed_report' in st.session_state:
         with st.expander("📊 See hardware estimate after compression"):
             compressed_estimate = estimate_on_chip(
@@ -166,10 +180,6 @@ if uploaded:
     st.subheader("📦 Export")
 
     if 'tflite_out' in st.session_state and st.session_state['tflite_out']:
-        st.caption(
-            "Your model has been compressed and is ready to download as TFLite — "
-            "the standard format for embedded ML deployment."
-        )
         st.download_button(
             label="⬇️ Download Compressed TFLite Model",
             data=st.session_state['tflite_out'],
