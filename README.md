@@ -35,9 +35,8 @@ Built by someone who has actually deployed models on STM32 and ESP32 hardware �
 
 | Format | Extension |
 |--------|-----------|
-| Keras | `.h5`, `.keras` |
 | TFLite | `.tflite` |
-| ONNX | `.onnx` |
+
 
 ---
 
@@ -59,7 +58,6 @@ ST's tool runs your model on actual hardware on their board farm. EdgeReady does
 
 What EdgeReady does that ST's tool doesn't:
 - Works with any chip, not just STM32
-- Accepts ONNX models, not just ST-specific formats
 - Explains every number in plain English
 - Lets you compress the model in the same workflow
 - Is completely open source and free
@@ -115,7 +113,7 @@ edgeready/
 
 ## Background
 
-This project grew out of my time at IISc NeuRonICS Lab where I worked with STM32 H7 boards, Genx320 event cameras, and ESP32-S3 for embedded ML benchmarking. I used ST's Edge AI Developer Cloud regularly and wanted an open, educational version that explains what's happening under the hood — especially the compression techniques like ternary quantization that I researched as part of RISC-V performance benchmarking work.
+This project grew out of my internship at IISc NeuRonICS Lab, where I supported PhD research on RISC-V performance benchmarking — running ternary weight models on STM32 and ESP32-S3 boards and logging CPU cycle and memory metrics across configurations. During that work I used ST's Edge AI Developer Cloud regularly and found it powerful but opaque — it gives you numbers without explaining what they mean. EdgeReady is my attempt to build an open version that makes those numbers understandable, especially the compression techniques like ternary quantization and pruning that came up directly in that research.
 
 ---
 
