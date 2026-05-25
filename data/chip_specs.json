@@ -1,37 +1,62 @@
 {
-  "ESP32 (Xtensa LX6)": {
-    "clock_mhz": 240,
-    "flash_kb": 4096,
-    "ram_kb": 520,
-    "mflops_per_mhz": 0.5,
-    "notes": "No FPU on base ESP32. Float ops are slow — INT8 strongly recommended."
+  "STM32H7 (Cortex-M7 @ 480MHz)": {
+    "clock_mhz": 480, "flash_kb": 2048, "ram_kb": 1024, "mflops_per_mhz": 2.0,
+    "notes": "High-performance MCU. The M7 core used with Genx320 at IISc. Best STM32 for ML."
   },
-  "ESP32-S3 (Xtensa LX7)": {
-    "clock_mhz": 240,
-    "flash_kb": 8192,
-    "ram_kb": 512,
-    "mflops_per_mhz": 1.0,
-    "notes": "Has vector extensions. Better for ML than base ESP32."
+  "STM32F7 (Cortex-M7 @ 216MHz)": {
+    "clock_mhz": 216, "flash_kb": 1024, "ram_kb": 512, "mflops_per_mhz": 2.0,
+    "notes": "Mid-range Cortex-M7. Good for audio and vision ML tasks."
   },
-  "STM32F4 (Cortex-M4)": {
-    "clock_mhz": 168,
-    "flash_kb": 1024,
-    "ram_kb": 192,
-    "mflops_per_mhz": 1.25,
-    "notes": "Has FPU. Widely used for embedded ML. Good balance of cost and performance."
+  "STM32F4 (Cortex-M4 @ 168MHz)": {
+    "clock_mhz": 168, "flash_kb": 1024, "ram_kb": 192, "mflops_per_mhz": 1.25,
+    "notes": "Workhorse of embedded ML. Has FPU. Widely supported by X-CUBE-AI and TFLite Micro."
   },
-  "STM32H7 (Cortex-M7)": {
-    "clock_mhz": 480,
-    "flash_kb": 2048,
-    "ram_kb": 1024,
-    "mflops_per_mhz": 2.0,
-    "notes": "High performance MCU. The M7 core you used with Genx320 at IISc."
+  "STM32L4 (Cortex-M4 @ 80MHz)": {
+    "clock_mhz": 80, "flash_kb": 1024, "ram_kb": 128, "mflops_per_mhz": 1.25,
+    "notes": "Ultra-low power M4. Good for battery-powered ML inference."
   },
-  "Arduino Uno (ATmega328P)": {
-    "clock_mhz": 16,
-    "flash_kb": 32,
-    "ram_kb": 2,
-    "mflops_per_mhz": 0.1,
-    "notes": "Almost no ML capability. Listed for reference — avoid deploying any neural network here."
+  "STM32G4 (Cortex-M4 @ 170MHz)": {
+    "clock_mhz": 170, "flash_kb": 512, "ram_kb": 128, "mflops_per_mhz": 1.25,
+    "notes": "Newer M4 variant with DSP extensions. Good for signal processing + ML."
+  },
+  "STM32F1 (Cortex-M3 @ 72MHz)": {
+    "clock_mhz": 72, "flash_kb": 128, "ram_kb": 20, "mflops_per_mhz": 0.5,
+    "notes": "Very constrained. No FPU. Avoid neural networks unless extremely small."
+  },
+  "ESP32-S3 (Xtensa LX7 @ 240MHz)": {
+    "clock_mhz": 240, "flash_kb": 8192, "ram_kb": 512, "mflops_per_mhz": 1.0,
+    "notes": "Has vector extensions for ML. The RISC-V adjacent chip used at IISc. Good IoT ML chip."
+  },
+  "ESP32 (Xtensa LX6 @ 240MHz)": {
+    "clock_mhz": 240, "flash_kb": 4096, "ram_kb": 520, "mflops_per_mhz": 0.5,
+    "notes": "No FPU. Float ops are software-emulated and slow. INT8 strongly recommended."
+  },
+  "ESP32-C3 (RISC-V @ 160MHz)": {
+    "clock_mhz": 160, "flash_kb": 4096, "ram_kb": 400, "mflops_per_mhz": 0.4,
+    "notes": "RISC-V core. Lower power than ESP32. Limited ML capability without FPU."
+  },
+  "Raspberry Pi Pico (Cortex-M0+ @ 133MHz)": {
+    "clock_mhz": 133, "flash_kb": 2048, "ram_kb": 264, "mflops_per_mhz": 0.3,
+    "notes": "Popular and cheap. No FPU on M0+. Good for simple TFLite Micro models."
+  },
+  "Nordic nRF52840 (Cortex-M4 @ 64MHz)": {
+    "clock_mhz": 64, "flash_kb": 1024, "ram_kb": 256, "mflops_per_mhz": 1.25,
+    "notes": "BLE-focused MCU with M4F. Used in wearable ML applications."
+  },
+  "Nordic nRF9160 (Cortex-M33 @ 64MHz)": {
+    "clock_mhz": 64, "flash_kb": 1024, "ram_kb": 256, "mflops_per_mhz": 1.5,
+    "notes": "LTE-M/NB-IoT modem + M33 core. Good for cellular IoT with on-device inference."
+  },
+  "Silicon Labs EFM32GG (Cortex-M4 @ 48MHz)": {
+    "clock_mhz": 48, "flash_kb": 1024, "ram_kb": 128, "mflops_per_mhz": 1.25,
+    "notes": "Ultra-low energy MCU. Simplicity Studio target. Good for energy-harvesting ML nodes."
+  },
+  "Arduino Nano 33 BLE (Cortex-M4 @ 64MHz)": {
+    "clock_mhz": 64, "flash_kb": 1024, "ram_kb": 256, "mflops_per_mhz": 1.25,
+    "notes": "Popular TinyML platform. Runs TFLite Micro. Good entry-level embedded ML board."
+  },
+  "Arduino Uno (ATmega328P @ 16MHz)": {
+    "clock_mhz": 16, "flash_kb": 32, "ram_kb": 2, "mflops_per_mhz": 0.1,
+    "notes": "Almost no ML capability. Listed for reference only — avoid neural networks here."
   }
 }
